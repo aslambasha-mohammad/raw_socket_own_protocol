@@ -6,6 +6,10 @@
 #include <sys/types.h>
 #include <sys/ioctl.h>		//ioctl
 #include <net/if.h>		//if_nametoindex
+#include <linux/if_ether.h>	//struct ethhdr, ETH_ALEN
+#include <linux/filter.h>	//struct sock_filter
+#include <linux/if_packet.h>	//struct sockaddr_ll
+#include <arpa/inet.h>		//if_nametoindex
 
 
 #define ETH_MY_PROTO		1234
@@ -43,5 +47,12 @@ struct __attribute__((__packed__)) my_l2_hdr {
 	unsigned int	payloadLen;
 };
 
+//Macros
+#define	MAX_BUFF_LEN		256
 #define	ETH_HDR_LEN		sizeof(struct ethhdr)
 #define	L2_HDR_LEN		sizeof(struct my_l2_hdr)
+#define MAX_MSG_SIZE		(sizeof(struct tlv) + MAX_BUFF_LEN)
+
+// Global variables
+unsigned char bcastMac[ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+unsigned char nillMac[ETH_ALEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};

@@ -2,25 +2,24 @@
 
 char intfName[32] = {'\0'};
 unsigned char intfMac[ETH_ALEN] = {'\0'};
-unsigned char bcastMac[ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 unsigned char destMac[ETH_ALEN] = {'\0'};
-unsigned char nillMac[ETH_ALEN] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 int send_l2Msg(int sockId, char *buff, enum my_msgType msgType)
 {
-	struct sockaddr_ll 	sadd_ll;
+	struct sockaddr_ll 	saddr_ll;
 	char *pkt	= NULL;
 	struct my_l2_hdr *msgHdr = NULL;
 	struct ethhdr	*ethHdr	= NULL;
 	char *payload	= NULL;
-	unsigned int paylaodLen = 0;
+	struct tlv	tlv_buff;
+	unsigned int payloadLen = 0, send_len = 0;
 	unsigned int hdr_len = 0, total_len = 0;
 
 	hdr_len = (ETH_HDR_LEN + L2_HDR_LEN);
-	payloadLen = strlen(buff);
+	payloadLen = (sizeof(struct tlv) + strlen(buff));
 	total_len = (hdr_len + payloadLen);
 
-	pkt = (char *)calloc(sizeof(char), total_len);
+	pkt = (char *)calloc(total_len, sizeof(char));
 	if(pkt == NULL)
 	{
 		printf("Failed to allocate memory for a packet\n");
@@ -33,7 +32,7 @@ int send_l2Msg(int sockId, char *buff, enum my_msgType msgType)
 
 	memset(&saddr_ll, '\0', sizeof(saddr_ll));
 	memcpy(ethHdr->h_source, intfMac, ETH_ALEN);
-	if(strcmp(destMac, nillMac) == 0)
+	if(strcmp((char *)destMac, (char *)nillMac) == 0)
 	{
 		memcpy(ethHdr->h_dest, bcastMac, ETH_ALEN);
 		memcpy(saddr_ll.sll_addr, bcastMac, ETH_ALEN);
@@ -52,12 +51,30 @@ int send_l2Msg(int sockId, char *buff, enum my_msgType msgType)
 	msgHdr->msgType = (unsigned char) msgType;
 	msgHdr->payloadLen = htonl(payloadLen);
 
-	memcpy(paylaod, buff, paylaodLen);
+	memset(&tlv_buff, '\0', sizeof(struct tlv));
+	tlv_buff.tlv_type = (unsigned char) HELLO_INFO;
+	tlv_buff.len = htonl(strlen(buff));
+	memcpy(payload, &tlv_buff, sizeof(struct tlv));
+	payload += sizeof(struct tlv);
 
-}
+	memcpy(payload, buff, payloadLen);
+	payload += payloadLen;
 
-int recv_l2Msg(int sockId, char *buff)
-{
+	saddr_ll.sll_ifindex = if_nametoindex(intfName);
+	saddr_ll.sll_halen = ETH_ALEN;
+	saddr_ll.sll_addr[6] = 0x00;
+	saddr_ll.sll_addr[7] = 0x00;
+
+	send_len = sendto(sockId, pkt, total_len, 0, (struct sockaddr *)&saddr_ll, sizeof(saddr_ll));
+	if(send_len < 0)
+	{
+		printf("Failed to send the '%s' to l2_client\n", buff);
+		free(pkt);
+		return -1;
+	}
+
+	free(pkt);
+	return 0;
 }
 
 int get_ifMacAddr(int sockId, const char *intfName, unsigned char *mac)
@@ -65,7 +82,7 @@ int get_ifMacAddr(int sockId, const char *intfName, unsigned char *mac)
 	struct ifreq ifr;
 
 	memset(&ifr, '\0', sizeof(ifr));
-	strncpy(&ifr.ifr_name, intfName, strlen(intfName));
+	strncpy(ifr.ifr_name, intfName, strlen(intfName));
 	ifr.ifr_ifindex = if_nametoindex(intfName);
 
 	if(ioctl(sockId, SIOCGIFHWADDR, &ifr) < 0)
@@ -82,16 +99,17 @@ int main(int argc, char **argv)
 {
 	if(argc != 2 || argc != 3)
 	{
-		printf("Usage: %s <interface name> [destnation mac if known]\n", agrv[0]);
+		printf("Usage: %s <interface name> [destnation mac if known]\n", argv[0]);
 		return -1;
 	}
 
 	int sock_Id = 0;
 	struct sockaddr_ll sock_addr;
 	struct sock_fprog bpf;
-	char msgBuff[256] = {'\0'};
+	char msgBuff[MAX_BUFF_LEN] = {'\0'};
 	unsigned char dstMac[ETH_ALEN] = {'\0'};
 
+	strcpy(intfName, argv[1]);
 	//Creating the unnamed Raw socket
 	sock_Id = socket(PF_PACKET, SOCK_RAW, htons(ETH_MY_PROTO));
 	if(sock_Id < 0)
@@ -103,7 +121,7 @@ int main(int argc, char **argv)
 	//Binding the socket to the interface index
 	memset(&sock_addr, '\0', sizeof(sock_addr));
 	sock_addr.sll_family = AF_PACKET;
-	sock_addr.sll_ifindex = ifnametoindex(intfName);
+	sock_addr.sll_ifindex = if_nametoindex(intfName);
 	if(bind(sock_Id, (struct sockaddr *)&sock_addr, sizeof(sock_addr)) < 0)
 	{
 		printf("Unable to bind the raw socket to interface: %s\n", intfName);
@@ -112,7 +130,7 @@ int main(int argc, char **argv)
 	}
 
 	//Setting socket option to filter only My own L2 protocol Msgs
-	bpf.len = (sizeof(struct my_l2Msg_filter)/sizeof(struct my_l2Msg_filter[0]));
+	bpf.len = (sizeof(my_l2Msg_filter)/sizeof(my_l2Msg_filter[0]));
 	bpf.filter = my_l2Msg_filter;
 	if(setsockopt(sock_Id, SOL_SOCKET, SO_ATTACH_FILTER, &bpf, sizeof(bpf)) < 0)
 	{
@@ -121,7 +139,6 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	strcpy(intfName, argv[1]);
 	if(argc == 3)
 	{
 		//converting the string MAC given to actual unsigned char Mac format
@@ -146,12 +163,6 @@ int main(int argc, char **argv)
 	if(send_l2Msg(sock_Id, msgBuff, HELLO_MSG) != 0)
 	{
 		printf("Failed to send Hello msg to client\n");
-	}
-
-	memset(msgBuff, '\0', sizeof(msgBuff));
-	if(recv_l2Msg(sock_Id, msgBuff) != 0)
-	{
-		printf("Failed to receive the msg from client\n");
 	}
 
 	close(sock_Id);
