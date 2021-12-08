@@ -163,6 +163,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	printf("Waiting for the L2 Msg from l2_server\n");
 	if(recv_l2Msg(sock_Id, msgBuff, HELLO_MSG) != 0)
 	{
 		printf("Failed to receive the L2 msg from l2_server\n");

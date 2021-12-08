@@ -72,6 +72,10 @@ int send_l2Msg(int sockId, char *buff, enum my_msgType msgType)
 		free(pkt);
 		return -1;
 	}
+	else
+	{
+		printf("Successfully sent '%s' to l2_client\n", buff);
+	}
 
 	free(pkt);
 	return 0;
@@ -97,7 +101,7 @@ int get_ifMacAddr(int sockId, const char *intfName, unsigned char *mac)
 
 int main(int argc, char **argv)
 {
-	if(argc != 2 || argc != 3)
+	if(argc != 2 && argc != 3)
 	{
 		printf("Usage: %s <interface name> [destnation mac if known]\n", argv[0]);
 		return -1;
@@ -139,6 +143,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	printf("Created the Raw Socket successfully\n");
 	if(argc == 3)
 	{
 		//converting the string MAC given to actual unsigned char Mac format
@@ -149,6 +154,8 @@ int main(int argc, char **argv)
 		destMac[3] = (unsigned char) dstMac[3];
 		destMac[4] = (unsigned char) dstMac[4];
 		destMac[5] = (unsigned char) dstMac[5];
+		printf("Destination Mac: %02x:%02x:%02x:%02x:%02x:%02x\n", destMac[0], destMac[1], destMac[2],
+			destMac[3], destMac[4], destMac[5]);
 	}
 
         if(get_ifMacAddr(sock_Id, intfName, intfMac) != 0)

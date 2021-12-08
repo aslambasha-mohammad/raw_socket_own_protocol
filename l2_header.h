@@ -12,9 +12,9 @@
 #include <arpa/inet.h>		//if_nametoindex
 
 
-#define ETH_MY_PROTO		1234
+#define ETH_MY_PROTO		0x1234
 
-//tcpdump -i enp1s0 -e ether[12] = 0x12 and ether[13] = 0x34 -dd
+//tcpdump -i <intf> -e ether[12] = 0x12 and ether[13] = 0x34 -dd
 struct sock_filter my_l2Msg_filter[] = {
 	{ 0x30, 0, 0, 0x0000000c },
 	{ 0x15, 0, 3, 0x00000012 },
