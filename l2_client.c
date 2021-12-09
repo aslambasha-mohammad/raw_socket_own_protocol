@@ -12,7 +12,7 @@ int recv_l2Msg(int sockId, char *buff, enum my_msgType type)
 	struct ethhdr	*ethHdr = NULL;
 	char *payload = NULL;
 	unsigned int hdr_len = 0, total_len = 0, payloadLen = 0;
-	unsigned int recv_len = 0;
+	unsigned int recv_len = 0, msg_len = 0;
 
 	hdr_len = (ETH_HDR_LEN + L2_HDR_LEN);
 	total_len = hdr_len + MAX_MSG_SIZE;
@@ -24,6 +24,7 @@ int recv_l2Msg(int sockId, char *buff, enum my_msgType type)
 		return -1;
 	}
 
+	printf("Waiting for the L2 Msg from l2_server\n");
 	recv_len = recv(sockId, pkt, total_len, 0);
 	if(recv_len > 0)
 	{
@@ -67,20 +68,21 @@ int recv_l2Msg(int sockId, char *buff, enum my_msgType type)
 			tlv_buff = (struct tlv *)payload;
 			payload += sizeof(struct tlv);
 			payloadLen -= sizeof(struct tlv);
+			msg_len = ntohl(tlv_buff->len);
 			switch(tlv_buff->tlv_type)
 			{
 				case HELLO_INFO:
 				{
-					memcpy(buff, payload, tlv_buff->len);
-					payload += tlv_buff->len;
-					payloadLen -= tlv_buff->len;
+					memcpy(buff, payload, msg_len);
+					payload += msg_len;
+					payloadLen -= msg_len;
 				}
 				break;
 				case BYE_INFO:
 				{
-					memcpy(buff, payload, tlv_buff->len);
-					payload += tlv_buff->len;
-					payloadLen -= tlv_buff->len;
+					memcpy(buff, payload, msg_len);
+					payload += msg_len;
+					payloadLen -= msg_len;
 				}
 				break;
 				default:
@@ -163,7 +165,6 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	printf("Waiting for the L2 Msg from l2_server\n");
 	if(recv_l2Msg(sock_Id, msgBuff, HELLO_MSG) != 0)
 	{
 		printf("Failed to receive the L2 msg from l2_server\n");
